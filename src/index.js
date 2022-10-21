@@ -60,15 +60,23 @@ io.on('connection', (socket) => {
 
   })
 
-  socket.on('GET_ROOMS', ({roomId, userId}) => {
-      console.log("get Rooms:", {roomId, userId});
+  socket.on('GET_ROOMS', ({myRoomId, userId}) => {
+      console.log("get Rooms:", {myRoomId, userId});
 
-      db.query(`SELECT messageroom_id2 FROM chat WHERE sender = ?`, userId, function(err, rows){
+      db.query(`SELECT CR.messageroom_id AS roomId, CR.MESSAGEROOM_OWNER AS user1, CR.MESSAGEROM_ATTENDER AS user2, 
+                        C.CREATE_DATE AS lastSendTime, C.MESSAGE_TEXT AS lastMsg
+                FROM chatroom CR JOIN chat C
+                ON CR.messageroom_id = C.messageroom_id2
+                WHERE CR.MESSAGEROOM_OWNER = ? OR CR.MESSAGEROM_ATTENDER = ?
+                ORDER BY C.CREATE_DATE DESC LIMIT 1`, 
+                [userId, userId], function(err, rows){
         if (err) throw err;
+        socket.join(myRoomId);
+        
         for (idx in rows){ 
-            const [userId, message, sendTime] = [rows[idx].SENDER, rows[idx].MESSAGE_TEXT, rows[idx].CREATE_DATE];
-            console.log(`${userId} : ${message} (${sendTime})`);
-            io.to(roomId).emit('UPDATE_ROOMS', {userId, nickname, message, sendTime});
+            console.log(rows[idx])
+            const [roomId, user1, user2, lastSendTime, lastMsg] = [rows[idx].roomId, rows[idx].user1, rows[idx].user2, rows[idx].lastSendTime, rows[idx].lastMsg]
+            io.to(myRoomId).emit('UPDATE_ROOMS', {roomId, user1, user2, lastSendTime, lastMsg});
         }
     });
 
