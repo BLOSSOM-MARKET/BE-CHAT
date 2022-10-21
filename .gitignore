@@ -1,0 +1,28 @@
+# Dependency Modules
+node_modules
+
+# App Packaged
+dist/
+build/
+*.zip
+
+# NPM
+.npm
+yarn.lock
+
+# Environment
+.env*
+config
+
+# Test
+coverage
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Patches
+patches/
