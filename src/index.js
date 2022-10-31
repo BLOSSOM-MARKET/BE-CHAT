@@ -101,16 +101,23 @@ io.on('connection', (socket) => {
 
   // 방 목록 가져오기
   socket.on('GET_ROOMS', ({myRoomId, userId}) => {
+        if (myRoomId === undefined) {
+            myRoomId = 'myRooms';
+        }
       console.log("get Rooms:", {myRoomId, userId});
 
       db.query(`SELECT CR.messageroom_id AS roomId, CR.MESSAGEROOM_OWNER AS user1, CR.MESSAGEROOM_ATTENDER AS user2, 
-                       CR.product_id AS productId, C.CREATE_DATE AS lastSendTime, C.MESSAGE_TEXT AS lastMsg,
+                       CR.product_id AS productId,
+                       (SELECT CREATE_DATE FROM Chatting C 
+                        WHERE CR.messageroom_id = C.messageroom_id 
+                        ORDER BY C.CREATE_DATE DESC LIMIT 1) AS lastSendTime,
+                       (SELECT MESSAGE_TEXT FROM Chatting C 
+                        WHERE CR.messageroom_id = C.messageroom_id 
+                        ORDER BY C.CREATE_DATE DESC LIMIT 1) AS lastMsg,
                        (SELECT USER_NICKNAME FROM User WHERE USER_ID = user1) AS name1, 
                        (SELECT USER_NICKNAME FROM User WHERE USER_ID = user2) AS name2
-                FROM ChattingRoom CR JOIN Chatting C
-                ON CR.messageroom_id = C.messageroom_id
-                WHERE CR.MESSAGEROOM_OWNER = ? OR CR.MESSAGEROOM_ATTENDER = ?
-                ORDER BY C.CREATE_DATE DESC LIMIT 1;
+                FROM ChattingRoom CR 
+                WHERE CR.MESSAGEROOM_OWNER = ? OR CR.MESSAGEROOM_ATTENDER = ?;
                 `, 
                 [userId, userId], function(err, rows){
         if (err) throw err;
@@ -119,8 +126,6 @@ io.on('connection', (socket) => {
         
         for (idx in rows){ 
             console.log(rows[idx])
-
-            
             const [roomId, user1, user2, name1, name2, lastSendTime, lastMsg, productId] = [rows[idx].roomId, rows[idx].user1, rows[idx].user2, rows[idx].name1, rows[idx].name2,rows[idx].lastSendTime, rows[idx].lastMsg, rows[idx].productId]
             io.to(myRoomId).emit('UPDATE_ROOMS', {roomId, user1, user2, lastSendTime, lastMsg, productId, name1, name2});
         }
