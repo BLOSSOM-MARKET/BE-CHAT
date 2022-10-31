@@ -119,6 +119,8 @@ io.on('connection', (socket) => {
         
         for (idx in rows){ 
             console.log(rows[idx])
+
+            
             const [roomId, user1, user2, name1, name2, lastSendTime, lastMsg, productId] = [rows[idx].roomId, rows[idx].user1, rows[idx].user2, rows[idx].name1, rows[idx].name2,rows[idx].lastSendTime, rows[idx].lastMsg, rows[idx].productId]
             io.to(myRoomId).emit('UPDATE_ROOMS', {roomId, user1, user2, lastSendTime, lastMsg, productId, name1, name2});
         }
