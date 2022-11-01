@@ -1,107 +1,152 @@
-const express = require('express');
-const path = require('path');
-const bodyParser = require('body-parser');
-const config = require('config');
-const cors = require('cors');
+const express = require("express");
+const path = require("path");
+const bodyParser = require("body-parser");
+const config = require("config");
+const cors = require("cors");
 
-const port = config.get('port');
+const port = config.get("port");
 const app = express();
-const logger = require('./middlewares')
-
+const logger = require("./middlewares");
 
 app.use(bodyParser.json());
-app.use(cors({origin: "*"}));
+app.use(cors({ origin: "*" }));
 
-
-app.get('/', (req, res, next) => {
-    res.send('hello world!');
+app.get("/", (req, res, next) => {
+  res.send("hello world!");
 });
 
-const server = app.listen(port, () => console.log(`Server is listening on port ${port}`));
+const server = app.listen(port, () =>
+  console.log(`Server is listening on port ${port}`)
+);
 
 // if you need DB, you can use this code. (set up in src/models/index.js)
 
-const db = require('./models');
+const db = require("./models");
 
-db.once('open', function () {           
-    console.log('DB Connected');
+db.once("open", function () {
+  console.log("DB Connected");
 });
 
-db.on('error', function (err) {
-    console.log('DB ERROR : ', err);
+db.on("error", function (err) {
+  console.log("DB ERROR : ", err);
 });
 
 const io = require("socket.io")(server, {
-    cors: {
-        origin:"*",
-    }
+  cors: {
+    origin: "*",
+  },
 });
 
-io.on('connection', (socket) => {
-  console.log('socket connected');
-    
-    
-  socket.on('disconnect', () => {
-    console.log('socket disconnected');
+io.on("connection", (socket) => {
+  console.log("socket connected");
+
+  socket.on("disconnect", () => {
+    console.log("socket disconnected");
   });
 
-  socket.on('JOIN_ROOM', ({roomId, yourId, myId, productId, nickname, yourNick}) => {
-    console.log("!!! JoinRoom___________________________")
-      console.log("join Room:", {roomId, yourId, myId, productId, nickname, yourNick});
+  socket.on(
+    "JOIN_ROOM",
+    ({ roomId, yourId, myId, productId, nickname, yourNick }) => {
+      console.log("!!! JoinRoom___________________________");
+      console.log("join Room:", {
+        roomId,
+        yourId,
+        myId,
+        productId,
+        nickname,
+        yourNick,
+      });
       socket.join(roomId);
 
-      if (roomId !== 'myRooms') {
+      if (roomId !== "myRooms") {
         // 기존에 생성된 채팅방이 없으면 새로 생성
-        db.query(`SELECT * FROM ChattingRoom WHERE messageroom_id = ?`, roomId, function(err, rows){
+        db.query(
+          `SELECT * FROM ChattingRoom WHERE messageroom_id = ?`,
+          roomId,
+          function (err, rows) {
             if (err) throw err;
 
             const now = new Date();
 
             const queryConfig = {
-                MESSAGEROOM_ID: roomId,
-                CREATE_DATE: now,
-                UPDATE_DATE: now,
-                MESSAGEROOM_OWNER: yourId,
-                MESSAGEROOM_ATTENDER: myId,
-                PRODUCT_ID: productId
-            }
-            
-            if (rows.length <= 0) {
-                console.log("기존 채팅방 없음. 신규생성");
+              MESSAGEROOM_ID: roomId,
+              CREATE_DATE: now,
+              UPDATE_DATE: now,
+              MESSAGEROOM_OWNER: yourId,
+              MESSAGEROOM_ATTENDER: myId,
+              PRODUCT_ID: productId,
+            };
 
-                db.query(`INSERT INTO ChattingRoom set ?`, queryConfig,function(err, rows){
-                    if (err) throw err;
-                });
+            if (rows.length <= 0) {
+              console.log("기존 채팅방 없음. 신규생성");
+
+              db.query(
+                `INSERT INTO ChattingRoom set ?`,
+                queryConfig,
+                function (err, rows) {
+                  if (err) throw err;
+                }
+              );
             }
-        });
+          }
+        );
       }
 
-      db.query(`SELECT * FROM Chatting WHERE messageroom_id = ?`, roomId, function(err, rows){
-            if (err) throw err;
-            for (idx in rows){ 
-                const [userId, message, sendTime, messageId] = [rows[idx].SENDER, rows[idx].MESSAGE_TEXT, rows[idx].CREATE_DATE, rows[idx].message_id];
-                const targetNick = userId === myId ? nickname : yourNick;
-                console.log(`${userId} : ${message} (${sendTime}) messageId: ${messageId}`);
-                const msgIdx = idx;
-                io.to(roomId).emit('UPDATE_MESSAGE', {userId, targetNick, message, sendTime, messageId, msgIdx});
-                // io.to(roomId).emit('UPDATE_MESSAGE', {roomId, yourId, myId, productId, nickname});
-            }
-        });
+      db.query(
+        `SELECT * FROM Chatting WHERE messageroom_id = ?`,
+        roomId,
+        function (err, rows) {
+          if (err) throw err;
+          const messages = [];
 
-  })
+          for (idx in rows) {
+            const [userId, message, sendTime, messageId] = [
+              rows[idx].SENDER,
+              rows[idx].MESSAGE_TEXT,
+              rows[idx].CREATE_DATE,
+              rows[idx].message_id,
+            ];
+            const targetNick = userId === myId ? nickname : yourNick;
+            console.log(
+              `${userId} : ${message} (${sendTime}) messageId: ${messageId}`
+            );
+            const msgIdx = idx;
+            messages.push({
+              userId,
+              targetNick,
+              message,
+              sendTime,
+              messageId,
+              msgIdx,
+            });
+            // io.to(roomId).emit('UPDATE_MESSAGE', {userId, targetNick, message, sendTime, messageId, msgIdx});
+            // io.to(roomId).emit('UPDATE_MESSAGE', {roomId, yourId, myId, productId, nickname});
+          }
+          io.to(roomId).emit("UPDATE_MESSAGE", messages);
+        }
+      );
+    }
+  );
 
   const getNickname = (userId) => {
     let nickname;
-    db.query(`SELECT USER_NICKNAME FROM User WHERE USER_ID = ?`, userId, function(err, rows) {
+    db.query(
+      `SELECT USER_NICKNAME FROM User WHERE USER_ID = ?`,
+      userId,
+      function (err, rows) {
         if (err) throw err;
-        console.log("nickname?????", rows, rows[0]['USER_NICKNAME'])
-        nickname = rows[0]['USER_NICKNAME'];
-    })
+        console.log("nickname?????", rows, rows[0]["USER_NICKNAME"]);
+        nickname = rows[0]["USER_NICKNAME"];
+      }
+    );
     return nickname;
-  }
+  };
 
   const getProductInfo = (pid) => {
-    return [`테스트용 상품명 ${pid}`, "https://cdn.cashfeed.co.kr/attachments/1eb9b8ff1b.jpg"];
+    return [
+      `테스트용 상품명 ${pid}`,
+      "https://cdn.cashfeed.co.kr/attachments/1eb9b8ff1b.jpg",
+    ];
     // let name;
     // db.query(`SELECT PRODUCT_NAME FROM Product WHERE PRODUCT_ID = ?`, pid, function(err, rows) {
     //     if (err) throw err;
@@ -109,16 +154,17 @@ io.on('connection', (socket) => {
     //     name = rows[0]['PRODUCT_NAME'];
     // })
     // return name;
-  }
+  };
 
   // 방 목록 가져오기
-  socket.on('GET_ROOMS', ({myRoomId, userId}) => {
-        if (myRoomId === undefined) {
-            myRoomId = 'myRooms';
-        }
-      console.log("get Rooms:", {myRoomId, userId});
+  socket.on("GET_ROOMS", ({ myRoomId, userId }) => {
+    if (myRoomId === undefined) {
+      myRoomId = "myRooms";
+    }
+    console.log("get Rooms:", { myRoomId, userId });
 
-      db.query(`SELECT CR.messageroom_id AS roomId, CR.MESSAGEROOM_OWNER AS user1, CR.MESSAGEROOM_ATTENDER AS user2, 
+    db.query(
+      `SELECT CR.messageroom_id AS roomId, CR.MESSAGEROOM_OWNER AS user1, CR.MESSAGEROOM_ATTENDER AS user2, 
                        CR.product_id AS productId,
                        (SELECT CREATE_DATE FROM Chatting C 
                         WHERE CR.messageroom_id = C.messageroom_id 
@@ -130,46 +176,80 @@ io.on('connection', (socket) => {
                        (SELECT USER_NICKNAME FROM User WHERE USER_ID = user2) AS name2
                 FROM ChattingRoom CR 
                 WHERE CR.MESSAGEROOM_OWNER = ? OR CR.MESSAGEROOM_ATTENDER = ?;
-                `, 
-                [userId, userId], function(err, rows){
+                `,
+      [userId, userId],
+      function (err, rows) {
         if (err) throw err;
-                
+
         socket.join(myRoomId);
-        
-        for (idx in rows){ 
-            console.log(rows[idx])
-            const [roomId, user1, user2, name1, name2, lastSendTime, lastMsg, productId] = [rows[idx].roomId, rows[idx].user1, rows[idx].user2, rows[idx].name1, rows[idx].name2,rows[idx].lastSendTime, rows[idx].lastMsg, rows[idx].productId]
 
-            // 상품 대표이미지, 상품 이름 가져오기
-            const [productName, productImg] = getProductInfo(productId);
-            io.to(myRoomId).emit('UPDATE_ROOMS', {roomId, user1, user2, lastSendTime, lastMsg, productId, name1, name2, productName, productImg});
+        for (idx in rows) {
+          console.log(rows[idx]);
+          const [
+            roomId,
+            user1,
+            user2,
+            name1,
+            name2,
+            lastSendTime,
+            lastMsg,
+            productId,
+          ] = [
+            rows[idx].roomId,
+            rows[idx].user1,
+            rows[idx].user2,
+            rows[idx].name1,
+            rows[idx].name2,
+            rows[idx].lastSendTime,
+            rows[idx].lastMsg,
+            rows[idx].productId,
+          ];
+
+          // 상품 대표이미지, 상품 이름 가져오기
+          const [productName, productImg] = getProductInfo(productId);
+          io.to(myRoomId).emit("UPDATE_ROOMS", {
+            roomId,
+            user1,
+            user2,
+            lastSendTime,
+            lastMsg,
+            productId,
+            name1,
+            name2,
+            productName,
+            productImg,
+          });
         }
-    });
+      }
+    );
+  });
 
-  })
-    
-  socket.on('SEND_MESSAGE', ({roomId, userId, nickname, message}) => {
+  socket.on("SEND_MESSAGE", ({ roomId, userId, nickname, message }) => {
     const now = new Date();
 
     const queryConfig = {
-        create_date: now,
-        sender: userId,
-        update_date: now, 
-        message_text: message,
-        messageroom_id: roomId
-    }
+      create_date: now,
+      sender: userId,
+      update_date: now,
+      message_text: message,
+      messageroom_id: roomId,
+    };
 
-    db.query(`INSERT INTO Chatting set ?`, queryConfig, function(err, rows){
-        if (err) throw err;
-        console.log("chat info is: ", rows);
-        for (idx in rows){ 
-            socket.emit('answer', rows[idx].name); 
-        }
+    db.query(`INSERT INTO Chatting set ?`, queryConfig, function (err, rows) {
+      if (err) throw err;
+      console.log("chat info is: ", rows);
+      for (idx in rows) {
+        socket.emit("answer", rows[idx].name);
+      }
     });
 
-    console.log({roomId, userId, nickname, message});
+    console.log({ roomId, userId, nickname, message });
     const targetNick = nickname;
-    io.to(roomId).emit('UPDATE_MESSAGE', {userId, targetNick, message, sendTime: now});
-  })
-    
+    io.to(roomId).emit("UPDATE_NEW_MESSAGE", {
+      userId,
+      targetNick,
+      message,
+      sendTime: now,
+    });
+  });
 });
