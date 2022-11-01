@@ -79,10 +79,11 @@ io.on('connection', (socket) => {
       db.query(`SELECT * FROM Chatting WHERE messageroom_id = ?`, roomId, function(err, rows){
             if (err) throw err;
             for (idx in rows){ 
-                const [userId, message, sendTime] = [rows[idx].SENDER, rows[idx].MESSAGE_TEXT, rows[idx].CREATE_DATE];
-                console.log(`${userId} : ${message} (${sendTime})`);
+                const [userId, message, sendTime, messageId] = [rows[idx].SENDER, rows[idx].MESSAGE_TEXT, rows[idx].CREATE_DATE, rows[idx].message_id];
                 const targetNick = userId === myId ? nickname : yourNick;
-                io.to(roomId).emit('UPDATE_MESSAGE', {userId, targetNick, message, sendTime});
+                console.log(`${userId} : ${message} (${sendTime}) messageId: ${messageId}`);
+                const msgIdx = idx;
+                io.to(roomId).emit('UPDATE_MESSAGE', {userId, targetNick, message, sendTime, messageId, msgIdx});
                 // io.to(roomId).emit('UPDATE_MESSAGE', {roomId, yourId, myId, productId, nickname});
             }
         });
@@ -97,6 +98,17 @@ io.on('connection', (socket) => {
         nickname = rows[0]['USER_NICKNAME'];
     })
     return nickname;
+  }
+
+  const getProductInfo = (pid) => {
+    return [`테스트용 상품명 ${pid}`, "https://cdn.cashfeed.co.kr/attachments/1eb9b8ff1b.jpg"];
+    // let name;
+    // db.query(`SELECT PRODUCT_NAME FROM Product WHERE PRODUCT_ID = ?`, pid, function(err, rows) {
+    //     if (err) throw err;
+    //     console.log("name?????", rows, rows[0]['PRODUCT_NAME'])
+    //     name = rows[0]['PRODUCT_NAME'];
+    // })
+    // return name;
   }
 
   // 방 목록 가져오기
@@ -127,7 +139,10 @@ io.on('connection', (socket) => {
         for (idx in rows){ 
             console.log(rows[idx])
             const [roomId, user1, user2, name1, name2, lastSendTime, lastMsg, productId] = [rows[idx].roomId, rows[idx].user1, rows[idx].user2, rows[idx].name1, rows[idx].name2,rows[idx].lastSendTime, rows[idx].lastMsg, rows[idx].productId]
-            io.to(myRoomId).emit('UPDATE_ROOMS', {roomId, user1, user2, lastSendTime, lastMsg, productId, name1, name2});
+
+            // 상품 대표이미지, 상품 이름 가져오기
+            const [productName, productImg] = getProductInfo(productId);
+            io.to(myRoomId).emit('UPDATE_ROOMS', {roomId, user1, user2, lastSendTime, lastMsg, productId, name1, name2, productName, productImg});
         }
     });
 
@@ -155,7 +170,6 @@ io.on('connection', (socket) => {
     console.log({roomId, userId, nickname, message});
     const targetNick = nickname;
     io.to(roomId).emit('UPDATE_MESSAGE', {userId, targetNick, message, sendTime: now});
-
   })
     
 });
