@@ -101,7 +101,7 @@ io.on("connection", (socket) => {
 
           for (idx in rows) {
             const [userId, message, sendTime, messageId] = [
-              rows[idx].SENDER,
+              rows[idx].SENDER_ID,
               rows[idx].MESSAGE_TEXT,
               rows[idx].CREATE_DATE,
               rows[idx].message_id,
@@ -143,17 +143,18 @@ io.on("connection", (socket) => {
   };
 
   const getProductInfo = (pid) => {
-    return [
-      `테스트용 상품명 ${pid}`,
-      "https://cdn.cashfeed.co.kr/attachments/1eb9b8ff1b.jpg",
-    ];
-    // let name;
-    // db.query(`SELECT PRODUCT_NAME FROM Product WHERE PRODUCT_ID = ?`, pid, function(err, rows) {
-    //     if (err) throw err;
-    //     console.log("name?????", rows, rows[0]['PRODUCT_NAME'])
-    //     name = rows[0]['PRODUCT_NAME'];
-    // })
-    // return name;
+    // return [
+    //   `테스트용 상품명 ${pid}`,
+    //   "https://cdn.cashfeed.co.kr/attachments/1eb9b8ff1b.jpg",
+    // ];
+    let productName, productImg ;
+    db.query(`SELECT PRODUCT_NAME, IMAGE1 FROM Product WHERE PRODUCT_ID = ?`, pid, function(err, rows) {
+        if (err) throw err;
+        console.log("name?????", rows, rows[0]['PRODUCT_NAME'])
+        productName = rows[0]['PRODUCT_NAME'];
+        productImg = rows[0]['IMAGE1'];
+    })
+    return [productName, productImg];
   };
 
   // 방 목록 가져오기
@@ -206,19 +207,44 @@ io.on("connection", (socket) => {
           ];
 
           // 상품 대표이미지, 상품 이름 가져오기
-          const [productName, productImg] = getProductInfo(productId);
-          io.to(myRoomId).emit("UPDATE_ROOMS", {
-            roomId,
-            user1,
-            user2,
-            lastSendTime,
-            lastMsg,
-            productId,
-            name1,
-            name2,
-            productName,
-            productImg,
-          });
+          // const [productName, productImg] = getProductInfo(productId);
+          let productName, productImg ;
+          db.query(`SELECT PRODUCT_NAME, IMAGE1 FROM Product WHERE PRODUCT_ID = ?`, productId, function(err, rows) {
+              if (err) throw err;
+              console.log("name?????", rows, rows[0]['PRODUCT_NAME'])
+              productName = rows[0]['PRODUCT_NAME'];
+              productImg = rows[0]['IMAGE1'];
+
+              const theRoom = {
+                roomId,
+                user1,
+                user2,
+                lastSendTime,
+                lastMsg,
+                productId,
+                name1,
+                name2,
+                productName,
+                productImg,
+              }
+              console.log("the room: ", theRoom)
+              io.to(myRoomId).emit("UPDATE_ROOMS", theRoom);
+          })
+
+          // const theRoom = {
+          //   roomId,
+          //   user1,
+          //   user2,
+          //   lastSendTime,
+          //   lastMsg,
+          //   productId,
+          //   name1,
+          //   name2,
+          //   productName,
+          //   productImg,
+          // }
+          // console.log("the room: ", theRoom)
+          // io.to(myRoomId).emit("UPDATE_ROOMS", theRoom);
         }
       }
     );
@@ -229,7 +255,7 @@ io.on("connection", (socket) => {
 
     const queryConfig = {
       create_date: now,
-      sender: userId,
+      sender_id: userId,
       update_date: now,
       message_text: message,
       messageroom_id: roomId,
